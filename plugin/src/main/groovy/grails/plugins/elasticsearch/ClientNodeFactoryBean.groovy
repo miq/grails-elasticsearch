@@ -16,6 +16,10 @@
 
 package grails.plugins.elasticsearch
 
+import co.elastic.clients.elasticsearch.ElasticsearchClient
+import co.elastic.clients.json.jackson.JacksonJsonpMapper
+import co.elastic.clients.transport.ElasticsearchTransport
+import co.elastic.clients.transport.rest_client.RestClientTransport
 import org.apache.http.HttpHost
 import org.apache.http.auth.AuthScope
 import org.apache.http.auth.UsernamePasswordCredentials
@@ -26,7 +30,8 @@ import org.apache.http.conn.ssl.TrustSelfSignedStrategy
 import org.apache.http.impl.client.BasicCredentialsProvider
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder
 import org.apache.http.ssl.SSLContextBuilder
-import org.elasticsearch.client.*
+import org.elasticsearch.client.RestClient
+import org.elasticsearch.client.RestClientBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.FactoryBean
@@ -35,21 +40,22 @@ class ClientNodeFactoryBean implements FactoryBean {
 
     private static final Logger LOG = LoggerFactory.getLogger(this)
 
-    ElasticSearchContextHolder elasticSearchContextHolder
-    RestHighLevelClient restHighLevelClient
+    ConfigObject config
+    ElasticsearchClient elasticClient
+    ElasticsearchTransport transport
 
     Object getObject() {
 
         int connectTimeout = 2
         int socketTimeout = 30
 
-        String connectionScheme = elasticSearchContextHolder.config.client.ssl.enabled ? 'https' : null
+        String connectionScheme = config.client.ssl.enabled ? 'https' : null
         RestClientBuilder builder = RestClient.builder(new HttpHost('localhost', 9200, connectionScheme))
 
         // Configure transport addresses
-        if (elasticSearchContextHolder.config.client.hosts) {
+        if (config.client.hosts) {
             List<HttpHost> httpHostList = []
-            elasticSearchContextHolder.config.client.hosts.each {
+            config.client.hosts.each {
                 int port = (it.port instanceof String)? Integer.valueOf(it.port) : it.port
                 httpHostList << new HttpHost("${it.host}", port, connectionScheme)
             }
@@ -58,13 +64,13 @@ class ClientNodeFactoryBean implements FactoryBean {
         }
 
         // Configure username and password credentials
-        if (elasticSearchContextHolder.config.client.username) {
+        if (config.client.username) {
             final CredentialsProvider credentialsProvider = new BasicCredentialsProvider()
-            credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(elasticSearchContextHolder.config.client.username, elasticSearchContextHolder.config.client.password))
+            credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(config.client.username, config.client.password))
             builder.setHttpClientConfigCallback(new RestClientBuilder.HttpClientConfigCallback() {
                 @Override
                 HttpAsyncClientBuilder customizeHttpClient(HttpAsyncClientBuilder httpClientBuilder) {
-                    if (elasticSearchContextHolder.config.client.ssl.enabled) {
+                    if (config.client.ssl.enabled) {
                         configureSSL(httpClientBuilder)
                     }
                     return httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider)
@@ -77,37 +83,37 @@ class ClientNodeFactoryBean implements FactoryBean {
         builder.setRequestConfigCallback(new RestClientBuilder.RequestConfigCallback() {
             @Override
             RequestConfig.Builder customizeRequestConfig(RequestConfig.Builder requestConfigBuilder) {
-                if (elasticSearchContextHolder.config.client.connectTimeout) {
-                    connectTimeout = elasticSearchContextHolder.config.client.connectTimeout as int
+                if (config.client.connectTimeout) {
+                    connectTimeout = config.client.connectTimeout as int
                     LOG.debug "Set REST client connect timeout to ${connectTimeout} seconds"
                 }
-                if (elasticSearchContextHolder.config.client.socketTimeout) {
-                    socketTimeout = elasticSearchContextHolder.config.client.socketTimeout as int
+                if (config.client.socketTimeout) {
+                    socketTimeout = config.client.socketTimeout as int
                     LOG.debug "Set REST client socket timeout to ${socketTimeout} seconds"
                 }
                 return requestConfigBuilder.setConnectTimeout(connectTimeout * 1000).setSocketTimeout(socketTimeout * 1000)
                         .setConnectionRequestTimeout(0)
             }
         })
-        def highLevelClientBuilder = new RestHighLevelClientBuilder(builder.build())
-        highLevelClientBuilder.setApiCompatibilityMode(true)
-        restHighLevelClient = highLevelClientBuilder.build()
+        RestClient httpClient = builder.build()
+        transport = new RestClientTransport(httpClient, new JacksonJsonpMapper())
+        elasticClient = new ElasticsearchClient(transport)
         LOG.debug 'Initialized Elasticsearch RestClient'
 
-        return restHighLevelClient
+        return elasticClient
     }
 
     private void configureSSL(HttpAsyncClientBuilder httpClientBuilder) {
         SSLContextBuilder sslContextBuilder = SSLContextBuilder.create()
-        if (elasticSearchContextHolder.config.client.ssl.trust == 'all') {
+        if (config.client.ssl.trust == 'all') {
             sslContextBuilder.loadTrustMaterial(new TrustAllStrategy())
         }
-        if (elasticSearchContextHolder.config.client.ssl.trust == 'self-signed') {
+        if (config.client.ssl.trust == 'self-signed') {
             sslContextBuilder.loadTrustMaterial(new TrustSelfSignedStrategy())
         }
-        if (elasticSearchContextHolder.config.client.ssl.trust == 'trust-store') {
-            def trustStoreFile = elasticSearchContextHolder.config.client.ssl.truststore.file as File
-            def trustStorePassword = elasticSearchContextHolder.config.client.ssl.truststore.password as String
+        if (config.client.ssl.trust == 'trust-store') {
+            def trustStoreFile = config.client.ssl.truststore.file as File
+            def trustStorePassword = config.client.ssl.truststore.password as String
             if (!trustStoreFile || !trustStoreFile.canRead() || ! trustStorePassword) {
                 throw new IllegalArgumentException("If you set elasticsearch.client.ssl.trust to 'trust-store' you must provide a truststore file and a truststore password!")
             }
@@ -118,7 +124,7 @@ class ClientNodeFactoryBean implements FactoryBean {
 
     @Override
     Class getObjectType() {
-        return Client
+        return ElasticsearchClient
     }
 
     @Override
@@ -127,7 +133,7 @@ class ClientNodeFactoryBean implements FactoryBean {
     }
 
     def shutdown() {
-        LOG.info 'Closing RestClient'
-        restHighLevelClient.close()
+        LOG.info 'Closing Elasticsearch transport'
+        transport?.close()
     }
 }

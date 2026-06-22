@@ -16,6 +16,11 @@
 
 package grails.plugins.elasticsearch.conversion
 
+
+import com.fasterxml.jackson.core.JsonGenerator
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.SerializationFeature
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import grails.core.GrailsApplication
 import grails.plugins.elasticsearch.ElasticSearchContextHolder
 import grails.plugins.elasticsearch.conversion.marshall.*
@@ -23,12 +28,9 @@ import grails.plugins.elasticsearch.mapping.DomainEntity
 import grails.plugins.elasticsearch.mapping.DomainReflectionService
 import grails.plugins.elasticsearch.mapping.SearchableClassMapping
 import grails.plugins.elasticsearch.unwrap.DomainClassUnWrapperChain
-import org.elasticsearch.xcontent.XContentBuilder
 
 import java.beans.PropertyEditor
 import java.sql.Timestamp
-
-import static org.elasticsearch.xcontent.XContentFactory.jsonBuilder
 
 /**
  * Marshall objects as JSON.
@@ -139,19 +141,23 @@ class JSONDomainFactory {
     }
 
     /**
-     * Build an XContentBuilder representing a domain instance in JSON.
-     * Use as a source to an index request to ElasticSearch.
+     * Build a JSON string representing a domain instance.
      * @param instance A domain class instance.
      * @return
      */
-    XContentBuilder buildJSON(Object instance) {
+    String buildJSON(Object instance) {
         DomainEntity domainClass = getInstanceDomainClass(instance)
-        XContentBuilder json = jsonBuilder().startObject()
-        // TODO : add maxDepth in custom mapping (only for "searchable components")
         SearchableClassMapping scm = elasticSearchContextHolder.getMappingContext((DomainEntity) domainClass)
 
         DefaultMarshallingContext marshallingContext = new DefaultMarshallingContext(maxDepth: 5, parentFactory: this)
         marshallingContext.push(instance)
+
+        Writer writer = new StringWriter()
+        ObjectMapper mapper = new ObjectMapper()
+        mapper.registerModule(new JavaTimeModule())
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+        JsonGenerator json = mapper.factory.createGenerator(writer)
+        json.writeStartObject()
 
         // Build the json-formated map that will contain the data to index
         scm.propertiesMapping.each { scpm ->
@@ -164,16 +170,16 @@ class JSONDomainFactory {
                 res = res.toCalendar().getTime().format("yyyy-MM-dd'T'HH:mm:ss'Z'")
             }
 
-            json.field(scpm.propertyName, res)
+            json.writeObjectField(scpm.propertyName, res)
             // add the alias
             if (scpm.getAlias()) {
-                json.field(scpm.getAlias(), res)
+                json.writeObjectField(scpm.getAlias(), res)
             }
         }
         marshallingContext.pop()
-        json.endObject()
+        json.writeEndObject()
         json.close()
-        json
+        return writer.toString()
     }
 
     boolean isDomainClass(Class<?> clazz) {

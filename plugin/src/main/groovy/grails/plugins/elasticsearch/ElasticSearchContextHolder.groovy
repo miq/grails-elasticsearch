@@ -1,5 +1,6 @@
 package grails.plugins.elasticsearch
 
+import co.elastic.clients.elasticsearch.ElasticsearchClient
 import grails.core.support.proxy.ProxyHandler
 import grails.plugins.elasticsearch.mapping.DomainEntity
 import grails.plugins.elasticsearch.mapping.SearchableClassMapping
@@ -9,7 +10,9 @@ import org.grails.datastore.mapping.proxy.EntityProxy
 @CompileStatic
 class ElasticSearchContextHolder {
 
-    ProxyHandler proxyHandler;
+    ElasticSearchHelper elasticSearchHelper
+
+    ProxyHandler proxyHandler
 
     /**
      * The configuration of the ElasticSearch plugin
@@ -117,4 +120,35 @@ class ElasticSearchContextHolder {
     SearchableClassMapping findMappingContextByElasticType(String elasticTypeName) {
         mapping.values().find { scm -> scm.elasticTypeName == elasticTypeName }
     }
+
+    /**
+     * Returns the SearchableClassMapping that is associated to a elasticSearch index
+     *
+     * @param indexName
+     * @return
+     */
+    SearchableClassMapping findMappingContextByIndex(String indexName) {
+        def scm = mapping.values().find { scm ->
+            scm.indexingIndex == indexName ||
+                    scm.queryingIndex == indexName ||
+                    scm.indexName == indexName
+        }
+        if (scm) {
+            return scm
+        }
+        // no mapping found for index, maybe one for its aliases exists
+        def aliases = aliasesOf(indexName)
+        def mappingName = aliases.find { mapping.values()*.indexName.contains(it) }
+        return mappingName ? mapping.values().find {it.indexName == mappingName } : null
+    }
+
+
+    // TODO: Document
+    Set<String> aliasesOf(String indexName) {
+        elasticSearchHelper.withElasticSearch { ElasticsearchClient client ->
+            def aliasesResponse = client.indices().alias
+            return aliasesResponse.result()[indexName].aliases().keySet()
+        }
+    }
+
 }

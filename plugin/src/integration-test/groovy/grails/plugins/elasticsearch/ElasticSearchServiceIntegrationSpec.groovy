@@ -1,20 +1,17 @@
 package grails.plugins.elasticsearch
 
+import co.elastic.clients.elasticsearch._types.DistanceUnit
+import co.elastic.clients.elasticsearch._types.SortOptions
+import co.elastic.clients.elasticsearch._types.SortOrder
+import co.elastic.clients.elasticsearch._types.aggregations.Aggregation
+import co.elastic.clients.elasticsearch._types.query_dsl.Query
+import co.elastic.clients.elasticsearch.core.GetRequest
+import co.elastic.clients.elasticsearch.core.GetResponse
+import co.elastic.clients.json.JsonData
 import grails.converters.JSON
 import grails.gorm.transactions.NotTransactional
 import grails.gorm.transactions.Rollback
 import grails.testing.mixin.integration.Integration
-import org.elasticsearch.action.get.GetRequest
-import org.elasticsearch.action.get.GetResponse
-import org.elasticsearch.client.RequestOptions
-import org.elasticsearch.common.unit.DistanceUnit
-import org.elasticsearch.index.query.QueryBuilder
-import org.elasticsearch.index.query.QueryBuilders
-import org.elasticsearch.join.query.JoinQueryBuilders
-import org.elasticsearch.search.aggregations.AggregationBuilders
-import org.elasticsearch.search.sort.FieldSortBuilder
-import org.elasticsearch.search.sort.SortBuilders
-import org.elasticsearch.search.sort.SortOrder
 import org.grails.web.json.JSONObject
 import org.hibernate.proxy.HibernateProxy
 import spock.lang.Ignore
@@ -44,7 +41,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
      * Be aware of this when indexing new objects.
      */
     def setup() {
-        // This is workaround due to issue with Grails3 and springbboot, otherwise we could have added in setupSpec
+        // This is workaround due to issue with Grails3 and springboot, otherwise we could have added in setupSpec
         if (!isSetup) {
             isSetup = true
             setupData()
@@ -58,7 +55,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         save new Product(productName: 'high and supreme', price: 45.50)
 
         EXAMPLE_GEO_BUILDINGS.each {
-            GeoPoint geoPoint = save new GeoPoint(lat: it.lat, lon: it.lon)
+            GeoPoint geoPoint = save new GeoPoint(lat: it.lat as Double, lon: it.lon as Double)
             save new Building(name: "${it.name}", location: geoPoint)
         }
 
@@ -86,7 +83,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         ElasticSearchResult search = search(Spaceship, 'arc')
 
         then:
-        search.total.value == 1
+        search.total.value() == 1
 
         def result = search.searchResults.first()
         result.name == 'Arc'
@@ -99,13 +96,13 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         def product = save new Product(productName: 'myTestProduct')
 
         when:
-        search(Product, 'myTestProduct').total.value == 1
+        search(Product, 'myTestProduct').total.value() == 1
 
         then:
         unindex(product)
 
         and:
-        search(Product, 'myTestProduct').total.value == 0
+        search(Product, 'myTestProduct').total.value() == 0
     }
 
     void 'Indexing the same object multiple times updates the corresponding ES entry'() {
@@ -117,7 +114,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         refreshIndices()
 
         then:
-        search(Product, 'myTestProduct').total.value == 1
+        search(Product, 'myTestProduct').total.value() == 1
 
         when:
         product.productName = 'newProductName'
@@ -127,11 +124,11 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         refreshIndices()
 
         then:
-        search(Product, 'myTestProduct').total.value == 0
+        search(Product, 'myTestProduct').total.value() == 0
 
         and:
         def result = search(Product, product.productName)
-        result.total.value == 1
+        result.total.value() == 1
         List<Product> searchResults = result.searchResults
         searchResults[0].productName == product.productName
     }
@@ -149,7 +146,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         def result = search(Product, product.productName)
 
         then:
-        result.total.value == 1
+        result.total.value() == 1
         List<Product> searchResults = result.searchResults
         searchResults[0].productName == product.productName
     }
@@ -166,7 +163,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         def result = search(Building, building.name)
 
         then:
-        result.total.value == 1
+        result.total.value() == 1
         List<Building> searchResults = result.searchResults
         searchResults[0].name == building.name
     }
@@ -174,7 +171,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
     void 'a date value should be marshalled and de-marshalled correctly'() {
         given:
         def date = new Date()
-        def product = save new Product(productName: 'product with date value', date: date)
+        Product product = save new Product(productName: 'product with date value', date: date)
 
         index(product)
         refreshIndices()
@@ -183,7 +180,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         def result = search(Product, product.productName)
 
         then:
-        result.total.value == 1
+        result.total.value() == 1
         List<Product> searchResults = result.searchResults
         searchResults[0].productName == product.productName
         searchResults[0].date == product.date
@@ -211,7 +208,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         def result = search(Dates, dates.name)
 
         then:
-        result.total.value == 1
+        result.total.value() == 1
         List<Dates> searchResults = result.searchResults
         searchResults[0].name == dates.name
         searchResults[0].localDate == dates.localDate
@@ -234,7 +231,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         def result = search(Building, 'EvileagueHQ')
 
         then:
-        result.total.value == 1
+        result.total.value() == 1
         List<Building> searchResults = result.searchResults
         def resultLocation = searchResults[0].location
         resultLocation.lat == location.lat
@@ -250,8 +247,8 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         refreshIndices()
 
         then:
-        Map<String, Object> mapping = getFieldMappingMetaData('test.building', 'building').sourceAsMap
-        mapping.properties.location.type == 'geo_point'
+        def mapping = getFieldMappingMetaData('test.building', 'building')
+        mapping.properties().get('location').isGeoPoint()
     }
 
     void 'search with geo distance filter'() {
@@ -264,7 +261,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
 
         when: 'a geo distance filter search is performed'
         Map params = [indices: Building, types: Building]
-        QueryBuilder query = QueryBuilders.matchAllQuery()
+        Query query = Query.of(q -> q.matchAll(m -> m))
         def location = '50, 13'
 
         Closure filter = {
@@ -276,7 +273,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         def result = elasticSearchService.search(params, query, filter)
 
         then: 'the building should be found'
-        1 == result.total.value
+        1l == result.total.value()
         List<Building> searchResults = result.searchResults
         searchResults[0].id == building.id
     }
@@ -293,32 +290,32 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
 
         when: 'searching for a price'
         def result = elasticSearchService.
-                search(QueryBuilders.matchAllQuery(), QueryBuilders.rangeQuery("price").gte(1.99).lte(2.3))
+                search(Query.of(q -> q.matchAll(m -> m)), Query.of(q -> q.range(r -> r.field("price").gte(JsonData.of(1.99)).lte(JsonData.of(2.3)))))
 
         then: "the result should be product 'wurm'"
-        result.total.value == 1
+        result.total.value() == 1
         List<Product> searchResults = result.searchResults
         searchResults[0].productName == wurmProduct.productName
     }
 
     void 'searching with a FilterBuilder filter and a Closure query'() {
         when: 'searching for a price'
-        QueryBuilder filter = QueryBuilders.rangeQuery("price").gte(1.99).lte(2.3)
-        def result = elasticSearchService.search(QueryBuilders.matchAllQuery(), filter)
+        Query filter = Query.of(q -> q.range(r -> r.field("price").gte(JsonData.of(1.99)).lte(JsonData.of(2.3))))
+        def result = elasticSearchService.search(Query.of(q -> q.matchAll(m -> m)), filter)
 
         then: "the result should be product 'wurm'"
-        result.total.value == 1
+        result.total.value() == 1
         List<Product> searchResults = result.searchResults
         searchResults[0].productName == "wurm"
     }
 
     void 'searching with a FilterBuilder filter and a QueryBuilder query'() {
         when: 'searching for a price'
-        QueryBuilder filter = QueryBuilders.rangeQuery("price").gte(1.99).lte(2.3)
-        def result = elasticSearchService.search(QueryBuilders.matchAllQuery(), filter)
+        Query filter = Query.of(q -> q.range(r -> r.field("price").gte(JsonData.of(1.99)).lte(JsonData.of(2.3))))
+        def result = elasticSearchService.search(Query.of(q -> q.matchAll(m -> m)), filter)
 
         then: "the result should be product 'wurm'"
-        result.total.value == 1
+        result.total.value() == 1
         List<Product> searchResults = result.searchResults
         searchResults[0].productName == "wurm"
     }
@@ -332,7 +329,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         def result = search(Product, { wildcard(productName: '*st') })
 
         then: 'the result should contain 2 products'
-        result.total.value == 2
+        result.total.value() == 2
         List<Product> searchResults = result.searchResults
         searchResults*.productName.containsAll('best', 'horst')
     }
@@ -350,7 +347,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
                 }, params2)
 
         then: 'the result should return 2 products'
-        result2.total.value == 2
+        result2.total.value() == 2
         List<Product> searchResults2 = result2.searchResults
         searchResults2*.productName.containsAll('horst', 'hobbit')
     }
@@ -366,7 +363,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         }
 
         then: 'the result should return 1 product'
-        result.total.value == 1
+        result.total.value() == 1
         List<Product> searchResults3 = result.searchResults
         searchResults3[0].productName == 'high and supreme'
     }
@@ -382,7 +379,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         def result = elasticSearchService.search({ match(productName: 'ästhätik') })
 
         then: 'the result should contain 1 product'
-        result.total.value == 1
+        result.total.value() == 1
         List<Product> searchResults = result.searchResults
         searchResults[0].productName == product.productName
     }
@@ -399,8 +396,8 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
 
         when:
         def result = elasticSearchService.search(
-                JoinQueryBuilders.hasParentQuery('store', QueryBuilders.matchQuery('owner', 'Horst'), false),
-                QueryBuilders.matchAllQuery(),
+                Query.of(q -> q.hasParent(hp -> hp.parentType('store').query(qq -> qq.match(m -> m.field('owner').query('Horst'))))),
+                Query.of(q -> q.matchAll(m -> m)),
                 [indices: Department, types: Department])
 
         then:
@@ -423,7 +420,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         def result = elasticSearchService.search(query, params)
 
         then: 'the correct result-part is returned'
-        result.total.value == 10
+        result.total.value() == 10
         result.searchResults.size() == 2
         result.searchResults*.productName == ['Produkt3', 'Produkt4']
     }
@@ -440,8 +437,8 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         refreshIndices()
 
         when: 'a search is performed'
-        def sort1 = new FieldSortBuilder('productName').order(SortOrder.ASC)
-        def sort2 = new FieldSortBuilder('price').order(SortOrder.DESC)
+        def sort1 = SortOptions.of(s -> s.field(f -> f.field('productName').order(SortOrder.Asc)))
+        def sort2 = SortOptions.of(s -> s.field(f -> f.field('price').order(SortOrder.Desc)))
         def params = [indices: Product, types: Product, sort: [sort1, sort2]]
         def query = {
             wildcard(productName: 'yogurt*')
@@ -454,8 +451,8 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         result.searchResults*.price == [1, 0, 1, 0]
 
         when: 'another search is performed'
-        sort1 = new FieldSortBuilder('productName').order(SortOrder.DESC)
-        sort2 = new FieldSortBuilder('price').order(SortOrder.ASC)
+        sort1 = SortOptions.of(s -> s.field(f -> f.field('productName').order(SortOrder.Desc)))
+        sort2 = SortOptions.of(s -> s.field(f -> f.field('price').order(SortOrder.Asc)))
         params = [indices: Product, types: Product, sort: [sort1, sort2]]
         query = {
             wildcard(productName: 'yogurt*')
@@ -463,7 +460,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         result = elasticSearchService.search(query, params)
 
         then: 'the correct result-part is returned'
-        result.total.value == 4
+        result.total.value() == 4
         result.searchResults.size() == 4
         result.searchResults*.productName == ['Yogurt1', 'Yogurt1', 'Yogurt0', 'Yogurt0']
         result.searchResults*.price == [0, 1, 0, 1]
@@ -482,7 +479,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         }
 
         then: 'the correct result-part is returned'
-        result.total.value == 1
+        result.total.value() == 1
         result.searchResults.size() == 1
         result.searchResults*.productName == ['Großer Kasten']
     }
@@ -495,7 +492,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
 
         when: 'a geo distance search is performed'
         Map params = [indices: Building, types: Building]
-        QueryBuilder query = QueryBuilders.matchAllQuery()
+        Query query = Query.of(q -> q.matchAll(m -> m))
         def location = [lat: 48.141, lon: 11.57]
 
         Closure filter = {
@@ -532,7 +529,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         }
 
         then: 'the correct result-part is returned'
-        result.total.value == 1
+        result.total.value() == 1
         result.searchResults.size() == 1
         result.searchResults*.productName == ['KLeiner kasten']
     }
@@ -546,12 +543,14 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
 
         when: 'a geo distance search is sorted by distance'
 
-        def sortBuilder = SortBuilders.geoDistanceSort('location', 48.141d, 11.57d).
-                unit(DistanceUnit.KILOMETERS).
-                order(SortOrder.ASC)
+        def sortBuilder = SortOptions.of(s -> s.geoDistance(g -> g
+                .field('location')
+                .location(l -> l.latlon(ll -> ll.lat(48.141d).lon(11.57d)))
+                .unit(DistanceUnit.Kilometers)
+                .order(SortOrder.Asc)))
 
         Map params = [indices: Building, types: Building, sort: sortBuilder]
-        QueryBuilder query = QueryBuilders.matchAllQuery()
+        Query query = Query.of(q -> q.matchAll(m -> m))
         def location = [lat: 48.141, lon: 11.57]
 
         Closure filter = {
@@ -583,7 +582,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         def search = search(Spaceship, 'serenity')
 
         then:
-        search.total.value == 1
+        search.total.value() == 1
 
         def result = search.searchResults.first()
         result.name == 'Serenity'
@@ -605,7 +604,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         }
 
         then:
-        search.total.value == 1
+        search.total.value() == 1
 
         def result = search.searchResults.first()
         result.name == 'USS Grissom'
@@ -627,7 +626,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         }
 
         then:
-        search.total.value == 1
+        search.total.value() == 1
 
         def result = search.searchResults.first()
         result.name == 'Intrepid'
@@ -656,9 +655,9 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         }
 
         then: "the json data should be searchable as if it was an actual component of the Spaceship"
-        search.total.value == 1
+        search.total.value() == 1
         def result = search.searchResults.first()
-        def shipData = JSON.parse(result.shipData)
+        def shipData = JSON.parse(result.shipData as String)
 
         result.name == 'Spaceball One'
         shipData.facilities.size() == 3
@@ -676,7 +675,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         def search = search(Toy, 'Yellow')
 
         then:
-        search.total.value == 1
+        search.total.value() == 1
         search.searchResults[0].id == plane.id
     }
 
@@ -711,13 +710,13 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
 
         when:
         def search = elasticSearchService.search(
-                QueryBuilders.matchQuery('productName', 'jim'),
+                Query.of(q -> q.match(m -> m.field('productName').query('jim'))),
                 null as Closure,
-                AggregationBuilders.max('max_price').field('price'))
+                ['max_price': Aggregation.of(a -> a.max(m -> m.field('price')))])
 
         then:
-        search.total.value == 2
-        search.aggregations.'max_price'.value == 5.99f
+        search.total.value() == 2
+        Math.abs(search.aggregations.'max_price'.max().value() - 5.99d) < 1e-6
     }
 
     @NotTransactional
@@ -733,7 +732,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         elasticSearchAdminService.refresh()
 
         expect: "parent is found"
-        elasticSearchService.search('foo', [indices: Parent, types: Parent]).total.value == 1
+        elasticSearchService.search('foo', [indices: Parent, types: Parent]).total.value() == 1
 
         when: "child is removed from parent"
         Parent.withNewTransaction {
@@ -744,7 +743,7 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         elasticSearchAdminService.refresh()
 
         then: "parent is still found"
-        elasticSearchService.search('foo', [indices: Parent, types: Parent]).total.value == 1
+        elasticSearchService.search('foo', [indices: Parent, types: Parent]).total.value() == 1
 
         cleanup:
         Parent.withNewTransaction {
@@ -758,15 +757,15 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
         def allObjects = Spaceship.list()
         allObjects.each {
             elasticSearchHelper.withElasticSearch { client ->
-                GetRequest getRequest = new GetRequest(
-                        getIndexName(domainClass), getTypeName(domainClass), it.id.toString());
-                GetResponse result = client.get(getRequest, RequestOptions.DEFAULT)
-                if (!result.isExists()) {
+                GetRequest getRequest = GetRequest.of(g -> g
+                        .index(getIndexName(domainClass))
+                        .id(it.id.toString()))
+                GetResponse<Map> result = client.get(getRequest, Map)
+                if (!result.found()) {
                     failures << it
                 }
             }
         }
         failures
     }
-
 }

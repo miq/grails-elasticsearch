@@ -1,17 +1,15 @@
 package grails.plugins.elasticsearch
 
+import co.elastic.clients.elasticsearch.ElasticsearchClient
+import co.elastic.clients.elasticsearch._types.mapping.TypeMapping
+import co.elastic.clients.elasticsearch._types.query_dsl.Query
+import co.elastic.clients.elasticsearch.core.SearchRequest
+import co.elastic.clients.elasticsearch.indices.GetIndexRequest
+import co.elastic.clients.elasticsearch.indices.GetIndexResponse
 import grails.core.GrailsApplication
 import grails.plugins.elasticsearch.mapping.DomainEntity
 import grails.plugins.elasticsearch.mapping.SearchableClassMappingConfigurator
 import grails.util.GrailsNameUtils
-import org.elasticsearch.action.search.SearchRequest
-import org.elasticsearch.client.RequestOptions
-import org.elasticsearch.client.RestHighLevelClient
-import org.elasticsearch.client.indices.GetIndexRequest
-import org.elasticsearch.client.indices.GetIndexResponse
-import org.elasticsearch.cluster.metadata.MappingMetadata
-import org.elasticsearch.common.collect.ImmutableOpenMap
-import org.elasticsearch.index.query.QueryBuilder
 import org.grails.datastore.gorm.GormEntity
 import org.hibernate.SessionFactory
 import org.springframework.beans.factory.annotation.Autowired
@@ -61,8 +59,8 @@ trait ElasticSearchSpec {
         elasticSearchService.search(request, params)
     }
 
-    ElasticSearchResult search(Class<?> clazz, QueryBuilder queryBuilder) {
-        elasticSearchService.search([indices: clazz, types: clazz], queryBuilder)
+    ElasticSearchResult search(Class<?> clazz, Query query) {
+        elasticSearchService.search([indices: clazz, types: clazz], query)
     }
 
     void clearSession() {
@@ -77,7 +75,7 @@ trait ElasticSearchSpec {
         elasticSearchAdminService.refresh()
     }
 
-    void refreshIndex(Collection<String> indices) {
+    void refreshIndex(List<String> indices) {
         elasticSearchAdminService.refresh(indices)
     }
 
@@ -122,14 +120,15 @@ trait ElasticSearchSpec {
         elasticSearchService.elasticSearchContextHolder.getMappingContextByType(clazz).domainClass
     }
 
-    MappingMetadata getFieldMappingMetaData(String indexName, String documentType) {
+    TypeMapping getFieldMappingMetaData(String indexName, String documentType) {
         if (elasticSearchAdminService.aliasExists(indexName)) {
             indexName = elasticSearchAdminService.indexPointedBy(indexName)
         }
-        elasticSearchHelper.withElasticSearch { RestHighLevelClient client ->
-            GetIndexRequest request = new GetIndexRequest(indexName)
-            GetIndexResponse getIndexResponse = client.indices().get(request, RequestOptions.DEFAULT)
-            getIndexResponse.mappings.get(indexName)
+        final String finalIndexName = indexName
+        elasticSearchHelper.withElasticSearch { ElasticsearchClient client ->
+            GetIndexRequest request = GetIndexRequest.of(g -> g.index(finalIndexName))
+            GetIndexResponse getIndexResponse = client.indices().get(request)
+            getIndexResponse.get(finalIndexName).mappings()
         }
     }
 

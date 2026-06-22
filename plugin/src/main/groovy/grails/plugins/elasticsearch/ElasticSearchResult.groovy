@@ -1,16 +1,16 @@
 package grails.plugins.elasticsearch
 
+import co.elastic.clients.elasticsearch._types.aggregations.Aggregate
+import co.elastic.clients.elasticsearch.core.search.HighlightField
+import co.elastic.clients.elasticsearch.core.search.TotalHits
 import groovy.transform.CompileStatic
-import org.apache.lucene.search.TotalHits
-import org.elasticsearch.search.aggregations.Aggregation
-import org.elasticsearch.search.fetch.subphase.highlight.HighlightField
 
 @CompileStatic
 class ElasticSearchResult {
     TotalHits total
     List searchResults = []
-    List<Map<String, HighlightField>> highlight = []
-    Map<String, Float> scores = [:]
-    Map<String, Object[]> sort = [:]
-    Map<String, Aggregation> aggregations = [:]
+    List<Map<String, List<String>>> highlight = []
+    Map<String, Double> scores = [:]
+    Map<String, List<String>> sort = [:]
+    Map<String, Aggregate> aggregations = [:]
 }

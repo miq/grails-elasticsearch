@@ -15,6 +15,8 @@
  */
 package grails.plugins.elasticsearch.util
 
+import co.elastic.clients.elasticsearch._types.aggregations.Aggregation
+import co.elastic.clients.elasticsearch._types.query_dsl.Query
 import grails.core.GrailsApplication
 import grails.plugins.elasticsearch.ElasticSearchContextHolder
 import grails.plugins.elasticsearch.ElasticSearchService
@@ -23,9 +25,6 @@ import grails.plugins.elasticsearch.mapping.DomainEntity
 import grails.plugins.elasticsearch.mapping.DomainReflectionService
 import grails.plugins.elasticsearch.mapping.SearchableClassMapping
 import org.apache.commons.logging.LogFactory
-import org.elasticsearch.index.query.QueryBuilder
-import org.elasticsearch.search.aggregations.AggregationBuilder
-import org.elasticsearch.search.aggregations.BaseAggregationBuilder
 import org.springframework.context.ApplicationContext
 
 class DomainDynamicMethodsUtils {
@@ -83,14 +82,17 @@ class DomainDynamicMethodsUtils {
             domain.delegateMetaClass.static."$searchMethodName" << { Map params, Closure q, Closure f, Closure a ->
                 elasticSearchService.search(params + indexAndType, q, f, a)
             }
-            domain.delegateMetaClass.static."$searchMethodName" << { Map params, QueryBuilder q, Closure f = null, Closure a = null ->
+            domain.delegateMetaClass.static."$searchMethodName" << { Map params, Query q, Closure f = null, Closure a = null ->
                 elasticSearchService.search(params + indexAndType, q, f, a)
             }
-            domain.delegateMetaClass.static."$searchMethodName" << { QueryBuilder q, Closure f = null, Closure a = null, Map params = [:] ->
+            domain.delegateMetaClass.static."$searchMethodName" << { Query q, Closure f = null, Closure a = null, Map params = [:] ->
                 elasticSearchService.search(q, f, a, params + indexAndType)
             }
             domain.delegateMetaClass.static."$searchMethodName" << { Closure q, f, Map params = [:] ->
                 elasticSearchService.search(q, f, null, params + indexAndType)
+            }
+            domain.delegateMetaClass.static."$searchMethodName" << { Closure q, f, Map a, Map params = [:] ->
+                elasticSearchService.search(q, f, a, params + indexAndType)
             }
             domain.delegateMetaClass.static."$searchMethodName" << { Closure q, f, a, Map params = [:] ->
                 elasticSearchService.search(q, f, a, params + indexAndType)
@@ -101,37 +103,37 @@ class DomainDynamicMethodsUtils {
             domain.delegateMetaClass.static."$searchMethodName" << { Map params, Closure q, f, a ->
                 elasticSearchService.search(params + indexAndType, q, f, a)
             }
-            domain.delegateMetaClass.static."$searchMethodName" << { Map params, QueryBuilder q, f = null ->
+            domain.delegateMetaClass.static."$searchMethodName" << { Map params, Query q, f = null ->
                 elasticSearchService.search(params + indexAndType, q, f)
             }
-            domain.delegateMetaClass.static."$searchMethodName" << { Map params, QueryBuilder q, f = null, a = null ->
+            domain.delegateMetaClass.static."$searchMethodName" << { Map params, Query q, f = null, a = null ->
                 elasticSearchService.search(params + indexAndType, q, f, a)
             }
-            domain.delegateMetaClass.static."$searchMethodName" << { QueryBuilder q, f = null, a = null, Map params = [:] ->
+            domain.delegateMetaClass.static."$searchMethodName" << { Query q, f = null, a = null, Map params = [:] ->
                 elasticSearchService.search(q, f, a, params + indexAndType)
             }
-            domain.delegateMetaClass.static."$searchMethodName" << { Map params, QueryBuilder q, QueryBuilder f, a = null ->
+            domain.delegateMetaClass.static."$searchMethodName" << { Map params, Query q, Query f, a = null ->
                 elasticSearchService.search(params + indexAndType, q, f, a)
             }
-            domain.delegateMetaClass.static."$searchMethodName" << { QueryBuilder q, QueryBuilder f, a = null, Map params = [:] ->
+            domain.delegateMetaClass.static."$searchMethodName" << { Query q, Query f, a = null, Map params = [:] ->
                 elasticSearchService.search(q, f, a, params + indexAndType)
             }
-            domain.delegateMetaClass.static."$searchMethodName" << { Map params, QueryBuilder q, QueryBuilder f, BaseAggregationBuilder a ->
+            domain.delegateMetaClass.static."$searchMethodName" << { Map params, Query q, Query f, Aggregation a ->
                 elasticSearchService.search(params + indexAndType, q, f, a)
             }
-            domain.delegateMetaClass.static."$searchMethodName" << { Map params, QueryBuilder q, QueryBuilder f, Collection<BaseAggregationBuilder> a ->
+            domain.delegateMetaClass.static."$searchMethodName" << { Map params, Query q, Query f, Collection<Aggregation> a ->
                 elasticSearchService.search(params + indexAndType, q, f, a)
             }
-            domain.delegateMetaClass.static."$searchMethodName" << { QueryBuilder q, QueryBuilder f, BaseAggregationBuilder a, Map params = [:] ->
+            domain.delegateMetaClass.static."$searchMethodName" << { Query q, Query f, Aggregation a, Map params = [:] ->
                 elasticSearchService.search(q, f, a, params + indexAndType)
             }
-            domain.delegateMetaClass.static."$searchMethodName" << { QueryBuilder q, QueryBuilder f, Collection<BaseAggregationBuilder> a, Map params = [:] ->
+            domain.delegateMetaClass.static."$searchMethodName" << { Query q, Query f, Collection<Aggregation> a, Map params = [:] ->
                 elasticSearchService.search(q, f, a, params + indexAndType)
             }
-            domain.delegateMetaClass.static."$searchMethodName" << { QueryBuilder q, BaseAggregationBuilder a, Map params = [:] ->
+            domain.delegateMetaClass.static."$searchMethodName" << { Query q, Aggregation a, Map params = [:] ->
                 elasticSearchService.search(q, null, a, params + indexAndType)
             }
-            domain.delegateMetaClass.static."$searchMethodName" << { QueryBuilder q, Collection<BaseAggregationBuilder> a, Map params = [:] ->
+            domain.delegateMetaClass.static."$searchMethodName" << { Query q, Collection<Aggregation> a, Map params = [:] ->
                 elasticSearchService.search(q, null, a, params + indexAndType)
             }
 

@@ -52,7 +52,7 @@ class ElasticsearchGrailsPlugin extends Plugin {
 
        Closure doWithSpring() {
            { ->
-               ConfigObject esConfig = config.elasticSearch
+               ConfigObject esConfig = config.elasticSearch as ConfigObject
 
                domainReflectionService(DomainReflectionService) { bean ->
                    mappingContext = ref('grailsDomainClassMappingContext')
@@ -63,12 +63,13 @@ class ElasticsearchGrailsPlugin extends Plugin {
                elasticSearchContextHolder(ElasticSearchContextHolder) {
                    config = esConfig
                    proxyHandler = ref('proxyHandler')
+                   elasticSearchHelper = ref('elasticSearchHelper')
                }
                elasticSearchHelper(ElasticSearchHelper) {
                    elasticSearchClient = ref('elasticSearchClient')
                }
                elasticSearchClient(ClientNodeFactoryBean) { bean ->
-                   elasticSearchContextHolder = ref('elasticSearchContextHolder')
+                   config = esConfig
                    bean.destroyMethod = 'shutdown'
                }
                indexRequestQueue(IndexRequestQueue) {

@@ -1,31 +1,27 @@
 package grails.plugins.elasticsearch
 
+import co.elastic.clients.elasticsearch._types.aggregations.Aggregation
+import co.elastic.clients.elasticsearch._types.query_dsl.Operator
+import co.elastic.clients.elasticsearch._types.query_dsl.Query
 import grails.gorm.transactions.Rollback
 import grails.testing.mixin.integration.Integration
-import org.elasticsearch.index.query.Operator
-import org.elasticsearch.index.query.QueryBuilder
-import org.elasticsearch.index.query.QueryBuilders
-import org.elasticsearch.search.aggregations.AggregationBuilder
-import org.elasticsearch.search.aggregations.AggregationBuilders
-import org.elasticsearch.search.aggregations.bucket.filter.FiltersAggregator
 import spock.lang.Specification
 import test.Photo
-
 
 @Integration
 @Rollback
 class DynamicMethodsIntegrationSpec extends Specification implements ElasticSearchSpec {
 
     def setup() {
-        save new Photo(name: "Captain Kirk", type: "png", size: 100, url: "http://www.nicenicejpg.com/100")
-        save new Photo(name: "Captain Picard", type: "png", size: 200, url: "http://www.nicenicejpg.com/200")
-        save new Photo(name: "Captain Sisko", type: "png", size: 300, url: "http://www.nicenicejpg.com/300")
-        save new Photo(name: "Captain Janeway", type: "jpg", size: 400, url: "http://www.nicenicejpg.com/400")
-        save new Photo(name: "Captain Archer", type: "jpg", size: 500, url: "http://www.nicenicejpg.com/500")
+        save new Photo(name: "Captain Kirk", type: "png", size: 100, url: "https://www.nicenicejpg.com/100")
+        save new Photo(name: "Captain Picard", type: "png", size: 200, url: "https://www.nicenicejpg.com/200")
+        save new Photo(name: "Captain Sisko", type: "png", size: 300, url: "https://www.nicenicejpg.com/300")
+        save new Photo(name: "Captain Janeway", type: "jpg", size: 400, url: "https://www.nicenicejpg.com/400")
+        save new Photo(name: "Captain Archer", type: "jpg", size: 500, url: "https://www.nicenicejpg.com/500")
     }
 
     def cleanup() {
-        Photo.list().each { it.delete() }
+        Photo.deleteAll(Photo.list())
     }
 
     void "can search using Dynamic Methods"() {
@@ -33,15 +29,15 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
         refreshIndices()
 
         expect:
-        search(Photo, 'Captain').total.value == 5
+        search(Photo, 'Captain').total.value() == 5
 
         when:
-        def results = Photo.search {
+        ElasticSearchResult results = Photo.search {
             match(name: "Captain")
         }
 
         then:
-        results.total.value == 5
+        results.total.value() == 5
         results.searchResults.every { it.name =~ /Captain/ }
     }
 
@@ -50,19 +46,19 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
         refreshIndices()
 
         expect:
-        search(Photo, 'Captain').total.value == 5
+        search(Photo, 'Captain').total.value() == 5
 
         when:
-        def results = Photo.search({
+        ElasticSearchResult results = Photo.search({
             match(name: 'Captain')
         }, {
             match {
-                "url"(query: "http://www.nicenicejpg.com/100", operator: "and")
+                "url"(query: "https://www.nicenicejpg.com/100", operator: "and")
             }
         })
 
         then:
-        results.total.value == 1
+        results.total.value() == 1
         results.searchResults[0].name == "Captain Kirk"
     }
 
@@ -71,14 +67,14 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
         refreshIndices()
 
         expect:
-        search(Photo, 'Captain').total.value == 5
+        search(Photo, 'Captain').total.value() == 5
 
         when:
-        def results = Photo.search({
+        ElasticSearchResult results = Photo.search({
             match(name: 'Captain')
         }, {
             match {
-                "url"(query: "http://www.nicenicejpg.com/100", operator: "and")
+                "url"(query: "https://www.nicenicejpg.com/100", operator: "and")
             }
         }, {
             "types" {
@@ -100,19 +96,17 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
         })
 
         then:
-        results.total.value == 1
+        results.total.value() == 1
         results.searchResults[0].name == 'Captain Kirk'
 
         results.aggregations.size() == 3
-        results.aggregations['types'].buckets.size() == 2
-        results.aggregations['types'].buckets[0].key == 'jpg'
-        results.aggregations['types'].buckets[0].docCount == 2
-        results.aggregations['types'].buckets[1].key == 'png'
-        results.aggregations['types'].buckets[1].docCount == 3
+        results.aggregations['types'].filters().buckets().keyed().size() == 2
+        results.aggregations['types'].filters().buckets().keyed()['jpg'].docCount() == 2
+        results.aggregations['types'].filters().buckets().keyed()['png'].docCount() == 3
 
-        results.aggregations['names'].buckets.size() == 6
+        results.aggregations['names'].sterms().buckets().array().size() == 6
 
-        results.aggregations['avg_size'].value == 300
+        results.aggregations['avg_size'].avg().value() == 300.0d
     }
 
     void "can search using a QueryBuilder and Dynamic Methods"() {
@@ -120,14 +114,14 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
         refreshIndices()
 
         expect:
-        search(Photo, 'Captain').total.value == 5
+        search(Photo, 'Captain').total.value() == 5
 
         when:
-        QueryBuilder query = QueryBuilders.matchQuery("url", "http://www.nicenicejpg.com/100").operator(Operator.AND)
-        def results = Photo.search(query)
+        def query = Query.of(b -> b.match(m -> m.field("url").operator(Operator.And).query("https://www.nicenicejpg.com/100")))
+        ElasticSearchResult results = Photo.search(query)
 
         then:
-        results.total.value == 1
+        results.total.value() == 1
         results.searchResults[0].name == "Captain Kirk"
     }
 
@@ -136,11 +130,11 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
         refreshIndices()
 
         expect:
-        search(Photo, 'Captain').total.value == 5
+        search(Photo, 'Captain').total.value() == 5
 
         when:
-        QueryBuilder query = QueryBuilders.matchQuery('url', 'http://www.nicenicejpg.com/100').operator(Operator.AND)
-        def results = Photo.search(query,
+        def query = Query.of(b -> b.match(m -> m.field('url').operator(Operator.And).query('https://www.nicenicejpg.com/100')))
+        ElasticSearchResult results = Photo.search(query,
                 null as Closure,
                 {
                     "types" {
@@ -162,19 +156,17 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
                 })
 
         then:
-        results.total.value == 1
+        results.total.value() == 1
         results.searchResults[0].name == 'Captain Kirk'
 
         results.aggregations.size() == 3
-        results.aggregations['types'].buckets.size() == 2
-        results.aggregations['types'].buckets[0].key == 'jpg'
-        results.aggregations['types'].buckets[0].docCount == 0
-        results.aggregations['types'].buckets[1].key == 'png'
-        results.aggregations['types'].buckets[1].docCount == 1
+        results.aggregations['types'].filters().buckets().keyed().size() == 2
+        results.aggregations['types'].filters().buckets().keyed()['jpg'].docCount() == 0
+        results.aggregations['types'].filters().buckets().keyed()['png'].docCount() == 1
 
-        results.aggregations['names'].buckets.size() == 2
+        results.aggregations['names'].sterms().buckets().array().size() == 2
 
-        results.aggregations['avg_size'].value == 100
+        results.aggregations['avg_size'].avg().value() == 100
     }
 
     void 'can search using a QueryBuilder, a filter and Dynamic Methods'() {
@@ -182,19 +174,19 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
         refreshIndices()
 
         expect:
-        search(Photo, 'Captain').total.value == 5
+        search(Photo, 'Captain').total.value() == 5
 
         when:
-        QueryBuilder query = QueryBuilders.matchQuery('name', 'Captain')
-        def results = Photo.search(query,
+        def query = Query.of(q -> q.match(m -> m.field('name').query('Captain')))
+        ElasticSearchResult results = Photo.search(query,
                 {
                     match {
-                        "url"(query: "http://www.nicenicejpg.com/100", operator: "and")
+                        "url"(query: "https://www.nicenicejpg.com/100", operator: "and")
                     }
                 })
 
         then:
-        results.total.value == 1
+        results.total.value() == 1
         results.searchResults[0].name == "Captain Kirk"
     }
 
@@ -203,14 +195,14 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
         refreshIndices()
 
         expect:
-        search(Photo, 'Captain').total.value == 5
+        search(Photo, 'Captain').total.value() == 5
 
         when:
-        QueryBuilder query = QueryBuilders.matchQuery("name", "Captain")
-        def results = Photo.search(query,
+        def query = Query.of(q -> q.match(m -> m.field("name").query("Captain")))
+        ElasticSearchResult results = Photo.search(query,
                 {
                     match {
-                        "url"(query: "http://www.nicenicejpg.com/100", operator: "and")
+                        "url"(query: "https://www.nicenicejpg.com/100", operator: "and")
                     }
                 },
                 {
@@ -234,19 +226,17 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
         )
 
         then:
-        results.total.value == 1
+        results.total.value() == 1
         results.searchResults[0].name == "Captain Kirk"
 
         results.aggregations.size() == 3
-        results.aggregations['types'].buckets.size() == 2
-        results.aggregations['types'].buckets[0].key == 'jpg'
-        results.aggregations['types'].buckets[0].docCount == 2
-        results.aggregations['types'].buckets[1].key == 'png'
-        results.aggregations['types'].buckets[1].docCount == 3
+        results.aggregations['types'].filters().buckets().keyed().size() == 2
+        results.aggregations['types'].filters().buckets().keyed()['jpg'].docCount() == 2
+        results.aggregations['types'].filters().buckets().keyed()['png'].docCount() == 3
 
-        results.aggregations['names'].buckets.size() == 6
+        results.aggregations['names'].sterms().buckets().array().size() == 6
 
-        results.aggregations['avg_size'].value == 300
+        results.aggregations['avg_size'].avg().value() == 300
     }
 
     void "can search using a QueryBuilder, a FilterBuilder and Dynamic Methods"() {
@@ -254,15 +244,17 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
         refreshIndices()
 
         expect:
-        search(Photo, 'Captain').total.value == 5
+        search(Photo, 'Captain').total.value() == 5
 
         when:
-        QueryBuilder query = QueryBuilders.matchAllQuery()
-        QueryBuilder filter = QueryBuilders.matchQuery("url", "http://www.nicenicejpg.com/100").operator(Operator.AND)
-        def results = Photo.search(query, filter)
+        def query = Query.of(q -> q.matchAll(m -> m))
+        def filter = Query.of(q -> q
+                .match(m -> m
+                        .field("url").operator(Operator.And).query("https://www.nicenicejpg.com/100")))
+        ElasticSearchResult results = Photo.search(query, filter)
 
         then:
-        results.total.value == 1
+        results.total.value() == 1
         results.searchResults[0].name == "Captain Kirk"
     }
 
@@ -271,35 +263,37 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
         refreshIndices()
 
         expect:
-        search(Photo, 'Captain').total.value == 5
+        search(Photo, 'Captain').total.value() == 5
 
         when:
-        QueryBuilder query = QueryBuilders.matchAllQuery()
-        QueryBuilder filter = QueryBuilders.matchQuery("url", "http://www.nicenicejpg.com/100").operator(Operator.AND)
-        def aggregations = []
-        aggregations << AggregationBuilders.filters('types',
-                new FiltersAggregator.KeyedFilter('jpg', QueryBuilders.matchQuery('type', 'jpg')),
-                new FiltersAggregator.KeyedFilter('png', QueryBuilders.matchQuery('type', 'png'))
+        def query = Query.of(q -> q.matchAll(m -> m))
+        def filter = Query.of(q -> q.match(m -> m.field("url").operator(Operator.And).query("https://www.nicenicejpg.com/100")))
+        def aggregations = [:]
+        aggregations['types'] = Aggregation.of(a -> a
+                .filters(f -> f
+                        .filters(q1 -> q1.keyed([
+                                'jpg': Query.of(bq -> bq.match(m -> m.field('type').query('jpg'))),
+                                'png': Query.of(bq -> bq.match(m -> m.field('type').query('png')))])
+                        )
+                )
         )
-        aggregations << AggregationBuilders.terms('names').field('name')
-        aggregations << AggregationBuilders.avg('avg_size').field('size')
+        aggregations['names'] = Aggregation.of(a -> a.terms(t -> t.field('name')))
+        aggregations['avg_size'] = Aggregation.of(a -> a.avg(av -> av.field('size')))
 
-        def results = Photo.search(query, filter, aggregations)
+        ElasticSearchResult results = Photo.search(query, filter, aggregations)
 
         then:
-        results.total.value == 1
+        results.total.value() == 1
         results.searchResults[0].name == "Captain Kirk"
 
         results.aggregations.size() == 3
-        results.aggregations['types'].buckets.size() == 2
-        results.aggregations['types'].buckets[0].key == 'jpg'
-        results.aggregations['types'].buckets[0].docCount == 2
-        results.aggregations['types'].buckets[1].key == 'png'
-        results.aggregations['types'].buckets[1].docCount == 3
+        results.aggregations['types'].filters().buckets().keyed().size() == 2
+        results.aggregations['types'].filters().buckets().keyed()['jpg'].docCount() == 2
+        results.aggregations['types'].filters().buckets().keyed()['png'].docCount() == 3
 
-        results.aggregations['names'].buckets.size() == 6
+        results.aggregations['names'].sterms().buckets().array().size() == 6
 
-        results.aggregations['avg_size'].value == 300
+        results.aggregations['avg_size'].avg().value() == 300
     }
 
     void "can search and filter using Dynamic Methods and a QueryBuilder"() {
@@ -307,16 +301,16 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
         refreshIndices()
 
         expect:
-        search(Photo, "Captain").total.value == 5
+        search(Photo, "Captain").total.value() == 5
 
         when:
-        QueryBuilder filter = QueryBuilders.matchQuery("url", "http://www.nicenicejpg.com/100").operator(Operator.AND)
-        def results = Photo.search({
+        def filter = Query.of(q -> q.match(m -> m.field("url").query("https://www.nicenicejpg.com/100").operator(Operator.And)))
+        ElasticSearchResult results = Photo.search({
             match(name: "Captain")
         }, filter)
 
         then:
-        results.total.value == 1
+        results.total.value() == 1
         results.searchResults[0].name == "Captain Kirk"
     }
 
@@ -325,35 +319,37 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
         refreshIndices()
 
         expect:
-        search(Photo, "Captain").total.value == 5
+        search(Photo, "Captain").total.value() == 5
 
         when:
-        QueryBuilder filter = QueryBuilders.matchQuery("url", "http://www.nicenicejpg.com/100").operator(Operator.AND)
-        def aggregations = []
-        aggregations << AggregationBuilders.filters('types',
-                new FiltersAggregator.KeyedFilter('jpg', QueryBuilders.matchQuery('type', 'jpg')),
-                new FiltersAggregator.KeyedFilter('png', QueryBuilders.matchQuery('type', 'png'))
+        def filter = Query.of(q -> q.match(m -> m.field("url").operator(Operator.And).query("https://www.nicenicejpg.com/100")))
+        def aggregations = [:]
+        aggregations['types'] = Aggregation.of(a -> a
+                .filters(f -> f
+                        .filters(q1 -> q1.keyed([
+                                'jpg': Query.of(bq -> bq.match(m -> m.field('type').query('jpg'))),
+                                'png': Query.of(bq -> bq.match(m -> m.field('type').query('png')))])
+                        )
+                )
         )
-        aggregations << AggregationBuilders.terms('names').field('name')
-        aggregations << AggregationBuilders.avg('avg_size').field('size')
-        def results = Photo.search({
+        aggregations['names'] = Aggregation.of(a -> a.terms(t -> t.field('name')))
+        aggregations['avg_size'] = Aggregation.of(a -> a.avg(av -> av.field('size')))
+        ElasticSearchResult results = Photo.search({
             match(name: 'Captain')
         }, filter, aggregations)
 
         then:
-        results.total.value == 1
+        results.total.value() == 1
         results.searchResults[0].name == "Captain Kirk"
 
         results.aggregations.size() == 3
-        results.aggregations['types'].buckets.size() == 2
-        results.aggregations['types'].buckets[0].key == 'jpg'
-        results.aggregations['types'].buckets[0].docCount == 2
-        results.aggregations['types'].buckets[1].key == 'png'
-        results.aggregations['types'].buckets[1].docCount == 3
+        results.aggregations['types'].filters().buckets().keyed().size() == 2
+        results.aggregations['types'].filters().buckets().keyed()['jpg'].docCount() == 2
+        results.aggregations['types'].filters().buckets().keyed()['png'].docCount() == 3
 
-        results.aggregations['names'].buckets.size() == 6
+        results.aggregations['names'].sterms().buckets().array().size() == 6
 
-        results.aggregations['avg_size'].value == 300
+        results.aggregations['avg_size'].avg().value() == 300
     }
 
     void "can search using a QueryBuilder, a FilterBuilder, an aggregation closure and Dynamic Methods"() {
@@ -361,12 +357,14 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
         refreshIndices()
 
         expect:
-        search(Photo, "Captain").total.value == 5
+        search(Photo, "Captain").total.value() == 5
 
         when:
-        QueryBuilder query = QueryBuilders.matchAllQuery()
-        QueryBuilder filter = QueryBuilders.matchQuery("url", "http://www.nicenicejpg.com/100").operator(Operator.AND)
-        def results = Photo.search(query, filter, {
+        def query = Query.of(q -> q.matchAll(m -> m))
+        def filter = Query.of(q -> q
+                .match(m -> m
+                        .field("url").operator(Operator.And).query("https://www.nicenicejpg.com/100")))
+        ElasticSearchResult results = Photo.search(query, filter, {
             "types" {
                 filters {
                     "filters" {
@@ -386,19 +384,16 @@ class DynamicMethodsIntegrationSpec extends Specification implements ElasticSear
         })
 
         then:
-        results.total.value == 1
+        results.total.value() == 1
         results.searchResults[0].name == "Captain Kirk"
 
         results.aggregations.size() == 3
-        results.aggregations['types'].buckets.size() == 2
-        results.aggregations['types'].buckets[0].key == 'jpg'
-        results.aggregations['types'].buckets[0].docCount == 2
-        results.aggregations['types'].buckets[1].key == 'png'
-        results.aggregations['types'].buckets[1].docCount == 3
+        results.aggregations['types'].filters().buckets().keyed().size() == 2
+        results.aggregations['types'].filters().buckets().keyed()['jpg'].docCount() == 2
+        results.aggregations['types'].filters().buckets().keyed()['png'].docCount() == 3
 
-        results.aggregations['names'].buckets.size() == 6
+        results.aggregations['names'].sterms().buckets().array().size() == 6
 
-        results.aggregations['avg_size'].value == 300
+        results.aggregations['avg_size'].avg().value() == 300
     }
-
 }

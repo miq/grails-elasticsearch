@@ -16,13 +16,13 @@
 
 package grails.plugins.elasticsearch.mapping
 
+import co.elastic.clients.elasticsearch._types.HealthStatus
 import grails.core.GrailsApplication
 import grails.plugins.elasticsearch.ElasticSearchAdminService
 import grails.plugins.elasticsearch.ElasticSearchContextHolder
 import grails.plugins.elasticsearch.util.ElasticSearchConfigAware
 import groovy.transform.CompileStatic
 import org.elasticsearch.ElasticsearchStatusException
-import org.elasticsearch.cluster.health.ClusterHealthStatus
 import org.elasticsearch.indices.InvalidIndexTemplateException
 import org.elasticsearch.transport.RemoteTransportException
 import org.slf4j.Logger
@@ -97,7 +97,7 @@ class SearchableClassMappingConfigurator implements ElasticSearchConfigAware {
      * Resolve the ElasticSearch mapping from the static "searchable" property (closure or boolean) in domain classes
      * @param mappings searchable class mappings to be install.
      */
-    void installMappings(Collection<SearchableClassMapping> mappings){
+    void installMappings(Collection<SearchableClassMapping> mappings) {
         Map<String, Object> indexSettings = buildIndexSettings()
 
         LOG.debug("Index settings are " + indexSettings)
@@ -117,6 +117,7 @@ class SearchableClassMappingConfigurator implements ElasticSearchConfigAware {
         //Install the mappings for each index all together
         indices.each { String indexName ->
 
+            // TODO: this needs refactoring and simplification. ES8 and onwards does not support type mapping
             List<SearchableClassMapping> indexMappings = mappings.findAll { it.indexName == indexName && it.isRoot() } as List<SearchableClassMapping>
             Map<String, Map> esMappings = indexMappings.collectEntries { [(it.elasticTypeName) : elasticMappings[it]] }
 
@@ -163,13 +164,13 @@ class SearchableClassMappingConfigurator implements ElasticSearchConfigAware {
             boolean queryingIndexExists = es.aliasExists(queryingIndex)
             boolean indexingIndexExists = es.aliasExists(indexingIndex)
             if (!queryingIndexExists || !indexingIndexExists) {
-                indexName = es.indexNameByAlias(indexName)
+                def indexNamePointedTo = es.indexNameByAlias(indexName)
 
                 if (!queryingIndexExists) {
-                    es.pointAliasTo(queryingIndex, indexName)
+                    es.pointAliasTo(queryingIndex, indexNamePointedTo)
                 }
                 if (!indexingIndexExists) {
-                    es.pointAliasTo(indexingIndex, indexName)
+                    es.pointAliasTo(indexingIndex, indexNamePointedTo)
                 }
             }
         }
@@ -178,7 +179,7 @@ class SearchableClassMappingConfigurator implements ElasticSearchConfigAware {
             mmm.applyMigrations(migrationStrategy, elasticMappings, mappingConflicts, indexSettings)
         }
 
-        es.waitForClusterStatus(ClusterHealthStatus.YELLOW)
+        es.waitForClusterStatus(HealthStatus.Yellow)
     }
 
     /**
@@ -188,8 +189,8 @@ class SearchableClassMappingConfigurator implements ElasticSearchConfigAware {
      */
     private void createIndexWithMappings(String indexName, MappingMigrationStrategy strategy, Map<String, Map> esMappings, Map indexSettings) throws RemoteTransportException {
         // Could be blocked on cluster level, thus wait.
-        es.waitForClusterStatus(ClusterHealthStatus.YELLOW)
-        if(!es.indexExists(indexName)) {
+        es.waitForClusterStatus(HealthStatus.Yellow)
+        if (!es.indexExists(indexName)) {
             LOG.debug("Index ${indexName} does not exists, initiating creation...")
             if (strategy == MappingMigrationStrategy.alias) {
                 def nextVersion = es.getNextVersion indexName
@@ -220,7 +221,16 @@ class SearchableClassMappingConfigurator implements ElasticSearchConfigAware {
                 }
             }
         }
+        sanitizeSettings(settings)
         settings
+    }
+
+    // TODO: write a test for this
+    private void sanitizeSettings(Map<String, Object> settings) {
+        settings.keySet().removeIf { String key -> key ==~ /.*\[\d+]$/ }
+        settings.values().findAll { value -> value instanceof Map<String, Object>}.each { it ->
+            sanitizeSettings(it as Map<String, Object>)
+        }
     }
 
     private Map<SearchableClassMapping, Map<String, Object>> buildElasticMappings(Collection<SearchableClassMapping> mappings) {

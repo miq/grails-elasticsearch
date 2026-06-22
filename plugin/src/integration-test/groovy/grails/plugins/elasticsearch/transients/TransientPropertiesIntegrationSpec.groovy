@@ -1,14 +1,14 @@
 package grails.plugins.elasticsearch.transients
 
+import co.elastic.clients.elasticsearch._types.query_dsl.ChildScoreMode
+import co.elastic.clients.elasticsearch._types.query_dsl.NestedQuery
+import co.elastic.clients.elasticsearch._types.query_dsl.Query
 import grails.core.GrailsApplication
 import grails.gorm.transactions.Rollback
 import grails.plugins.elasticsearch.ElasticSearchAdminService
 import grails.plugins.elasticsearch.ElasticSearchService
 import grails.plugins.elasticsearch.mapping.SearchableClassMappingConfigurator
 import grails.testing.mixin.integration.Integration
-import org.apache.lucene.search.join.ScoreMode
-import org.elasticsearch.index.query.NestedQueryBuilder
-import org.elasticsearch.index.query.QueryBuilders
 import org.springframework.beans.factory.annotation.Autowired
 import spock.lang.Specification
 import test.transients.*
@@ -109,12 +109,16 @@ class TransientPropertiesIntegrationSpec extends Specification {
         elasticSearchAdminService.refresh()
 
         then: "We can search using the transient collection component"
-        NestedQueryBuilder query = QueryBuilders.nestedQuery(
-                'players',
-                QueryBuilders.matchQuery('players.name', 'Ronaldo'),
-                ScoreMode.None
+        def query = NestedQuery.of(nq -> nq
+                .path('players')
+                .query(q -> q
+                        .match(m -> m
+                                .field('players.name')
+                                .query('Ronaldo'))
+                )
+                .scoreMode(ChildScoreMode.None)
         )
-        Team.search(query).total.value == 1
+        Team.search(new Query(query)).total.value == 1
 
         and: "transients on search results using the component association use data stored on ElasticSearch"
         Team team = Team.search("Barcelona").searchResults.first()

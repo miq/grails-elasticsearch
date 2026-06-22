@@ -1,13 +1,13 @@
 package grails.plugins.elasticsearch.mapping
 
+import co.elastic.clients.elasticsearch._types.ElasticsearchException
 import grails.core.GrailsApplication
+import grails.gorm.transactions.Rollback
 import grails.plugins.elasticsearch.ElasticSearchAdminService
 import grails.plugins.elasticsearch.ElasticSearchBootStrapHelper
 import grails.plugins.elasticsearch.ElasticSearchContextHolder
 import grails.plugins.elasticsearch.ElasticSearchService
-import grails.plugins.elasticsearch.exception.MappingException
 import grails.testing.mixin.integration.Integration
-import grails.gorm.transactions.Rollback
 import org.springframework.beans.factory.annotation.Autowired
 import spock.lang.Ignore
 import spock.lang.See
@@ -117,7 +117,7 @@ class MappingMigrationSpec extends Specification {
         searchableClassMappingConfigurator.installMappings([catalogMapping])
 
         then:
-        thrown MappingException
+        thrown ElasticsearchException
     }
 
     /*
@@ -146,7 +146,7 @@ class MappingMigrationSpec extends Specification {
         searchableClassMappingConfigurator.installMappings([catalogMapping])
 
         then:
-        thrown MappingException
+        thrown ElasticsearchException
     }
 
     /*
@@ -243,7 +243,7 @@ class MappingMigrationSpec extends Specification {
         searchableClassMappingConfigurator.installMappings([catalogMapping])
 
         then: "it fails"
-        thrown MappingException
+        thrown ElasticsearchException
     }
 
     //TODO: Commented in 2.7.1
@@ -425,7 +425,7 @@ class MappingMigrationSpec extends Specification {
         searchableClassMappingConfigurator.installMappings([catalogMapping, itemMapping])
 
         then: "an exception is thrown, due to the existing index"
-        thrown MappingException
+        thrown ElasticsearchException
 
         and: "no content or mappings are affected"
         es.indexExists(catalogMapping.indexName)

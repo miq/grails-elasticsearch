@@ -21,12 +21,12 @@
         <logger name="StackTrace" level="ERROR" />
 
         <logger name="grails.plugins.elasticsearch" level="DEBUG"/>
+    </springProfile>
 
-<!--        <logger name="org.hibernate.SQL" level="DEBUG"/>-->
-<!--        <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="TRACE"/>-->
-<!--        <logger name="org.springframework.security" level="TRACE"/>-->
+    <springProfile name="test">
+        <logger name="StackTrace" level="ERROR" />
 
-<!--        <root level="WARN"/>-->
+        <logger name="grails.plugins.elasticsearch" level="INFO"/>
     </springProfile>
 
 <!--    logging to a file-->

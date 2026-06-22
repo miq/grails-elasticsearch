@@ -5,6 +5,8 @@ plugins {
     id 'config.testing'
 }
 
+ext['elasticsearch.version'] = elasticsearchVersion
+
 version = projectVersion
 group = "org.grails.plugins"
 
@@ -12,6 +14,11 @@ dependencies {
     profile "org.apache.grails.profiles:web-plugin"
 
     developmentOnly "org.springframework.boot:spring-boot-devtools" // Spring Boot DevTools may cause performance slowdowns or compatibility issues on larger applications
+
+    // Elasticsearch java client
+    implementation 'co.elastic.clients:elasticsearch-java:7.17.29'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
     implementation "org.elasticsearch:elasticsearch:${elasticsearchVersion}"
     implementation "org.elasticsearch.client:elasticsearch-rest-client:${elasticsearchVersion}"
@@ -62,6 +69,13 @@ dependencies {
         add('implementation', 'com.fasterxml.jackson.core:jackson-databind:2.21.3') {
             because '2.9.10.5 from spatial4j has vulnerabilities'
         }
+    }
+}
+
+configurations.configureEach {
+    resolutionStrategy {
+        force 'co.elastic.clients:elasticsearch-java:7.17.29'
+        force 'org.elasticsearch.client:elasticsearch-rest-client:7.17.29'
     }
 }
 

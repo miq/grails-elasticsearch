@@ -1,11 +1,9 @@
 package grails.plugins.elasticsearch
 
-import spock.lang.Specification
-
-import grails.testing.mixin.integration.Integration
+import co.elastic.clients.elasticsearch._types.query_dsl.Query
 import grails.gorm.transactions.Rollback
-
-import org.elasticsearch.index.query.QueryBuilders
+import grails.testing.mixin.integration.Integration
+import spock.lang.Specification
 import test.all.Post
 
 /**
@@ -40,7 +38,7 @@ class AnalyzersIntegrationSpec extends Specification implements ElasticSearchSpe
         refreshIndices()
 
         expect:
-        search(Post, 'xyz').total.value == 1
+        search(Post, 'xyz').total.value() == 1
 
         when:
         def results = Post.search('xyz')
@@ -54,7 +52,7 @@ class AnalyzersIntegrationSpec extends Specification implements ElasticSearchSpe
         refreshIndices()
 
         expect:
-        search(Post, QueryBuilders.matchQuery('subject', 'xyz')).total.value == 0
+        search(Post, Query.of(q -> q.match(m -> m.field('subject').query('xyz')))).total.value() == 0
 
         when:
         def results = Post.search {
@@ -70,7 +68,7 @@ class AnalyzersIntegrationSpec extends Specification implements ElasticSearchSpe
         refreshIndices()
 
         expect:
-        search(Post, QueryBuilders.matchQuery('body', 'xyz')).total.value == 1
+        search(Post, Query.of(q -> q.match(m -> m.field('body').query('xyz')))).total.value() == 1
 
         when:
         def results = Post.search {
