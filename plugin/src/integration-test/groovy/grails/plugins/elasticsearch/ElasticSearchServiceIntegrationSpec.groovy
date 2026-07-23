@@ -7,7 +7,6 @@ import co.elastic.clients.elasticsearch._types.aggregations.Aggregation
 import co.elastic.clients.elasticsearch._types.query_dsl.Query
 import co.elastic.clients.elasticsearch.core.GetRequest
 import co.elastic.clients.elasticsearch.core.GetResponse
-import co.elastic.clients.json.JsonData
 import grails.converters.JSON
 import grails.gorm.transactions.NotTransactional
 import grails.gorm.transactions.Rollback
@@ -290,7 +289,15 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
 
         when: 'searching for a price'
         def result = elasticSearchService.
-                search(Query.of(q -> q.matchAll(m -> m)), Query.of(q -> q.range(r -> r.field("price").gte(JsonData.of(1.99)).lte(JsonData.of(2.3)))))
+                search(Query.of(q -> q.matchAll(m -> m)),
+                        Query.of(q -> q
+                                .range(r -> r.number(
+                                        rn -> rn.field("price")
+                                                .gte(1.99)
+                                                .lte(2.3))
+                                )
+                        )
+                )
 
         then: "the result should be product 'wurm'"
         result.total.value() == 1
@@ -300,7 +307,8 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
 
     void 'searching with a FilterBuilder filter and a Closure query'() {
         when: 'searching for a price'
-        Query filter = Query.of(q -> q.range(r -> r.field("price").gte(JsonData.of(1.99)).lte(JsonData.of(2.3))))
+        Query filter = Query.of(q -> q.range(r -> r.number(
+                rn -> rn.field("price").gte(1.99).lte(2.3))))
         def result = elasticSearchService.search(Query.of(q -> q.matchAll(m -> m)), filter)
 
         then: "the result should be product 'wurm'"
@@ -311,7 +319,8 @@ class ElasticSearchServiceIntegrationSpec extends Specification implements Elast
 
     void 'searching with a FilterBuilder filter and a QueryBuilder query'() {
         when: 'searching for a price'
-        Query filter = Query.of(q -> q.range(r -> r.field("price").gte(JsonData.of(1.99)).lte(JsonData.of(2.3))))
+        Query filter = Query.of(q -> q.range(r -> r.number(
+                rn -> rn.field("price").gte(1.99).lte(2.3))))
         def result = elasticSearchService.search(Query.of(q -> q.matchAll(m -> m)), filter)
 
         then: "the result should be product 'wurm'"

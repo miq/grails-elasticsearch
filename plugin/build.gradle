@@ -16,7 +16,7 @@ dependencies {
     developmentOnly "org.springframework.boot:spring-boot-devtools" // Spring Boot DevTools may cause performance slowdowns or compatibility issues on larger applications
 
     // Elasticsearch java client
-    implementation 'co.elastic.clients:elasticsearch-java:7.17.29'
+    implementation "co.elastic.clients:elasticsearch-java:${elasticsearchVersion}"
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
@@ -73,8 +73,7 @@ dependencies {
 
 configurations.configureEach {
     resolutionStrategy {
-        force 'co.elastic.clients:elasticsearch-java:7.17.29'
-        force 'org.elasticsearch.client:elasticsearch-rest-client:7.17.29'
+        force "co.elastic.clients:elasticsearch-java:${elasticsearchVersion}"
     }
 }
 
