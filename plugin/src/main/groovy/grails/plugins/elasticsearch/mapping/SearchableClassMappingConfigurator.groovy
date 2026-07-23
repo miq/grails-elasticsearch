@@ -16,15 +16,13 @@
 
 package grails.plugins.elasticsearch.mapping
 
+import co.elastic.clients.elasticsearch._types.ElasticsearchException
 import co.elastic.clients.elasticsearch._types.HealthStatus
 import grails.core.GrailsApplication
 import grails.plugins.elasticsearch.ElasticSearchAdminService
 import grails.plugins.elasticsearch.ElasticSearchContextHolder
 import grails.plugins.elasticsearch.util.ElasticSearchConfigAware
 import groovy.transform.CompileStatic
-import org.elasticsearch.ElasticsearchStatusException
-import org.elasticsearch.indices.InvalidIndexTemplateException
-import org.elasticsearch.transport.RemoteTransportException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -131,8 +129,8 @@ class SearchableClassMappingConfigurator implements ElasticSearchConfigAware {
                         }
                     }
                     createIndexWithMappings(indexName,  migrationStrategy, esMappings, indexSettings)
-                } catch (RemoteTransportException rte) {
-                    LOG.debug(rte.getMessage())
+                } catch (ElasticsearchException rte) {
+                    LOG.debug(rte.message)
                 }
             } else { //We install the mappings one by one
                 indexMappings.each { SearchableClassMapping scm ->
@@ -146,10 +144,7 @@ class SearchableClassMappingConfigurator implements ElasticSearchConfigAware {
                     } catch (IllegalArgumentException e) {
                         LOG.warn("Could not install mapping ${scm.indexName}/${scm.elasticTypeName} due to ${e.message}, migrations needed")
                         mappingConflicts << new MappingConflict(scm: scm, exception: e)
-                    } catch (InvalidIndexTemplateException e) {
-                        LOG.warn("Could not install mapping ${scm.indexName}/${scm.elasticTypeName} due to ${e.message}, migrations needed")
-                        mappingConflicts << new MappingConflict(scm: scm, exception: e)
-                    } catch (ElasticsearchStatusException e) {
+                    } catch (ElasticsearchException e) {
                         LOG.warn("Could not install mapping ${scm.indexName}/${scm.elasticTypeName} due to ${e.message}, migrations needed")
                         mappingConflicts << new MappingConflict(scm: scm, exception: e)
                     } catch (IOException e) {
@@ -185,9 +180,9 @@ class SearchableClassMappingConfigurator implements ElasticSearchConfigAware {
     /**
      * Creates the Elasticsearch index once unblocked and its read and write aliases
      * @param indexName
-     * @throws RemoteTransportException if some other error occured
+     * @throws ElasticsearchException if some other error occurred
      */
-    private void createIndexWithMappings(String indexName, MappingMigrationStrategy strategy, Map<String, Map> esMappings, Map indexSettings) throws RemoteTransportException {
+    private void createIndexWithMappings(String indexName, MappingMigrationStrategy strategy, Map<String, Map> esMappings, Map indexSettings) throws ElasticsearchException {
         // Could be blocked on cluster level, thus wait.
         es.waitForClusterStatus(HealthStatus.Yellow)
         if (!es.indexExists(indexName)) {

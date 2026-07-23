@@ -7,6 +7,7 @@ import grails.plugins.elasticsearch.ElasticSearchAdminService
 import grails.plugins.elasticsearch.ElasticSearchBootStrapHelper
 import grails.plugins.elasticsearch.ElasticSearchContextHolder
 import grails.plugins.elasticsearch.ElasticSearchService
+import grails.plugins.elasticsearch.exception.MappingException
 import grails.testing.mixin.integration.Integration
 import org.springframework.beans.factory.annotation.Autowired
 import spock.lang.Ignore
@@ -117,7 +118,7 @@ class MappingMigrationSpec extends Specification {
         searchableClassMappingConfigurator.installMappings([catalogMapping])
 
         then:
-        thrown ElasticsearchException
+        thrown MappingException
     }
 
     /*
@@ -146,7 +147,7 @@ class MappingMigrationSpec extends Specification {
         searchableClassMappingConfigurator.installMappings([catalogMapping])
 
         then:
-        thrown ElasticsearchException
+        thrown MappingException
     }
 
     /*

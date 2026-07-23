@@ -10,7 +10,6 @@ import grails.plugins.elasticsearch.ElasticSearchSpec
 import grails.plugins.elasticsearch.exception.MappingException
 import grails.testing.mixin.integration.Integration
 import groovy.json.JsonSlurper
-import org.elasticsearch.search.SearchHit
 import spock.lang.Specification
 import test.Color
 import test.GeoPoint
@@ -39,7 +38,6 @@ class DomainClassUnmarshallerIntegrationSpec extends Specification implements El
         def unmarshaller = new DomainClassUnmarshaller(elasticSearchContextHolder: elasticSearchContextHolder, grailsApplication: grailsApplication)
 
         given: 'a search hit with a geo_point'
-        SearchHit
         def hit = Hit<GeoPoint>.of(b -> b
                 .index('test.building')
                 .id('1')

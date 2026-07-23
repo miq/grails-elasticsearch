@@ -85,7 +85,7 @@ class ElasticSearchAdminService {
     void deleteIndex(List<String> indices = null) {
         elasticSearchHelper.withElasticSearch { ElasticsearchClient client ->
             if (!indices) {
-                client.indices().delete(DeleteIndexRequest.of(b -> b.index("_all")))
+                client.indices().delete(DeleteIndexRequest.of(b -> b.index(getIndices() as List)))
                 LOG.info "Deleted all indices"
             } else {
                 client.indices().delete(DeleteIndexRequest.of(b -> b.index(indices)))
@@ -325,7 +325,7 @@ class ElasticSearchAdminService {
                 LOG.debug "Index used to point to ${oldIndex}, removing ..."
                 client.indices().deleteAlias(DeleteAliasRequest.of(b -> b.index(oldIndex).name(alias)))
             }
-            LOG.error "Create alias -> index: ${versionedIndex}; alias: ${alias}"
+            LOG.debug "Create alias -> index: ${versionedIndex}; alias: ${alias}"
             client.indices().putAlias(PutAliasRequest.of(b -> b.index(versionedIndex).name(alias)))
         }
     }

@@ -19,10 +19,8 @@
 
 package grails.plugins.elasticsearch.util
 
-import org.elasticsearch.common.bytes.BytesReference
-import org.elasticsearch.xcontent.XContentBuilder
-import org.elasticsearch.xcontent.XContentFactory
-import org.elasticsearch.xcontent.XContentType
+import com.fasterxml.jackson.core.JsonGenerator
+import com.fasterxml.jackson.databind.ObjectMapper
 
 /**
  * This is a hacked version of EC's GXContentBuilder with patched property delegation.
@@ -35,10 +33,11 @@ class GXContentBuilder extends GroovyObjectSupport {
 
     static int rootResolveStrategy = Closure.DELEGATE_FIRST // the default
 
+    // TODO share identical objectMappers throughout the plugin
+    private final ObjectMapper objectMapper = new ObjectMapper()
+
     def root
-
     def current
-
     def nestingStack = []
 
     def build(Closure c) {
@@ -46,22 +45,21 @@ class GXContentBuilder extends GroovyObjectSupport {
     }
 
     String buildAsString(Closure c) {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON)
         def json = build(c)
-        builder.map(json)
-        return builder.string()
+        Writer writer = new StringWriter()
+        JsonGenerator jsonGenerator = objectMapper.factory.createGenerator(writer)
+        jsonGenerator.writeObject(json)
+        jsonGenerator.close()
+        return writer.toString()
     }
 
     byte[] buildAsBytes(Closure c) {
-        return buildAsBytes(c, XContentType.JSON)
-    }
-
-    byte[] buildAsBytes(Closure c, XContentType contentType) {
-        XContentBuilder builder = XContentFactory.contentBuilder(contentType)
         def json = build(c)
-        builder.map(json)
-        def bytes = BytesReference.bytes(builder)
-        return BytesReference.toBytes(bytes)
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream()
+        JsonGenerator jsonGenerator = objectMapper.factory.createGenerator(outputStream)
+        jsonGenerator.writeObject(json)
+        jsonGenerator.close()
+        return outputStream.toByteArray()
     }
 
     private buildRoot(Closure c) {
@@ -84,11 +82,9 @@ class GXContentBuilder extends GroovyObjectSupport {
         def prev = current
         def list = []
         try {
-
             current = list
             c.call(list)
-        }
-        finally {
+        } finally {
             current = prev
         }
         return list

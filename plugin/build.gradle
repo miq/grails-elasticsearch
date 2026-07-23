@@ -5,7 +5,7 @@ plugins {
     id 'config.testing'
 }
 
-ext['elasticsearch.version'] = elasticsearchVersion
+ext["elasticsearch-client.version"] = elasticsearchVersion
 
 version = projectVersion
 group = "org.grails.plugins"
@@ -20,9 +20,8 @@ dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
-    implementation "org.elasticsearch:elasticsearch:${elasticsearchVersion}"
-    implementation "org.elasticsearch.client:elasticsearch-rest-client:${elasticsearchVersion}"
-    implementation "org.elasticsearch.client:elasticsearch-rest-high-level-client:${elasticsearchVersion}"
+    // needed for some date time conversions, remove at some later point in time
+    implementation 'joda-time:joda-time:2.14.2'
 
     runtimeOnly "org.hibernate:hibernate-ehcache:5.6.15.Final", {
         exclude group: 'org.hibernate', module: 'hibernate-core'
