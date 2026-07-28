@@ -16,9 +16,11 @@ static searchable = {
 |===
 | Option Name | Values | Description
 
-| boost 
+| boost (**deprecated**, only Elasicsearch < 8)
 | Number 
-| A decimal boost value. With a positive value, promotes search results for hits in this property; with a negative value, demotes search results that hit this property.
+| Elasticsearch servers > 8 use query time boosting or rank feature queries. The boost parameter is only available for Elasticsearch **servers** up to 7.x.
+
+A decimal boost value. With a positive value, promotes search results for hits in this property; with a negative value, demotes search results that hit this property.
 
 | <<searchableComponent, component>> 
 | `true`, `false` 
