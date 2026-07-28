@@ -10,8 +10,7 @@ class User {
 
     static searchable = {
         only = ['lastname', 'firstname']
-        lastname boost: 20
-        firstname boost: 15, index: 'true' // This leads to a keyword field in index mapping supporting exact matches only
+        firstname index: 'true' // This leads to a keyword field in index mapping supporting exact matches only
         tweets component: true
     }
 

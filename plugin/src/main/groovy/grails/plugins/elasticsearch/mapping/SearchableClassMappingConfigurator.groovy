@@ -131,6 +131,7 @@ class SearchableClassMappingConfigurator implements ElasticSearchConfigAware {
                     createIndexWithMappings(indexName,  migrationStrategy, esMappings, indexSettings)
                 } catch (ElasticsearchException rte) {
                     LOG.debug(rte.message)
+                    throw rte
                 }
             } else { //We install the mappings one by one
                 indexMappings.each { SearchableClassMapping scm ->

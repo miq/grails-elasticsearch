@@ -3,7 +3,7 @@ package grails.plugins.elasticsearch.twitter
 class Tag {
     static searchable = {
         except = ['boostValue']
-        name multi_field: true, boost: 5
+        name multi_field: true
     }
 
     static mapping = {
